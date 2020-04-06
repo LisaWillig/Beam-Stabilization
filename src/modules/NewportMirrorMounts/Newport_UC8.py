@@ -30,18 +30,19 @@ import time as t
 import pyvisa as visa
 
 
-class AGUC8:
+class AGUC8():
     """
     Device driver for Newport Agilis AG-UC motion controller
     """
 
-    def __init__(self):
+    def __init__(self, config):
         self.timeout = 1.0
         self.instr = None
         self.channel = None
-        self.address = 'ASRLCOM5::INSTR'
+        print(config.mirrorAddress)
+        self.address = str(config.mirrorAddress)
 
-    def initialize(self, channel):
+    def initialize(self):
         # create device handle
         rm = visa.ResourceManager()
         print(rm.list_resources())
@@ -53,7 +54,7 @@ class AGUC8:
         self.instr.parity = visa.constants.Parity.none
         self.instr.term_chars = "\r\n"
         self.instr.write("MR")
-        self.setChannel(channel)
+        #self.setChannel(1)
 
     def write(self, axis, cmd):
         cmdstr = str(axis) + cmd

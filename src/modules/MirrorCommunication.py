@@ -1,10 +1,10 @@
 from modules.NewportMirrorMounts.Newport_UC8 import AGUC8 as Mirror
 
-class MirrorCom:
+class MirrorCom():
 
-    def __init__(self, chan):
-        self.mir = Mirror()
-        self.mir.initialize(chan)
+    def __init__(self, config):
+        self.mir = Mirror(config)
+        self.mir.initialize()
 
     def move(self, channel, axis, step):
         self.mir.relativeMove(channel, axis, step)

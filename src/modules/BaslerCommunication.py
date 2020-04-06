@@ -3,52 +3,10 @@ from pypylon import genicam
 import pyqtgraph as pg
 import numpy as np
 
-class BaslerCamera:
-
-    def __init__(self):
-        tlFactory = pylon.TlFactory.GetInstance()
-        self.devices = tlFactory.EnumerateDevices()
-        self.camera = pylon.InstantCamera(
-            tlFactory.CreateDevice(
-            self.devices[2]))
-
-    def openCommunication(self):
-        self.camera.Open()
-        print(self.camera.DeviceUserID())
+#namesCamsToUse = {0:'BS_11'}#, 1:'BS_2'}
 
 
-    def setCameraParameters(self, exposureTime):
-        self.camera.MaxNumBuffer = 2
-        try:
-            self.camera.Gain = self.camera.Gain.Min
-        except genicam.LogicalErrorException:
-            self.camera.GainRaw = self.camera.GainRaw.Min
-        self.camera.Width = self.camera.Width.Max
-        self.camera.Height = self.camera.Height.Max
-        self.camera.ExposureTimeRaw = exposureTime
-        #self.camera.PixelFormat = "Mono12"
-
-    def getImage(self):
-        self.camera.StartGrabbingMax(1)
-        return self.camIsGrabbing()
-
-    def camIsGrabbing(self):
-
-        while self.camera.IsGrabbing():
-
-            result = self.camera.RetrieveResult(
-                5000,
-                pylon.TimeoutHandling_ThrowException)
-            if result.GrabSucceeded():
-                img = result.Array
-                result.Release()
-
-            else:
-                print("Error: ", result.GetErrorCode(), result.GetErrorDescription())
-        return img
-
-
-class BaslerMultiple():
+class BaslerCam():
 
     def __init__(self, camsToUse):
 
@@ -63,7 +21,7 @@ class BaslerMultiple():
         # Create an array of instant cameras for the found devices and avoid
         # exceeding a maximum number of devices.
         self.cameras = pylon.InstantCameraArray(min(len(self.devices), len(self.devices)))
-
+    
     def openCommunications(self):
         self.camList = []
         camContext = 0
@@ -93,21 +51,30 @@ class BaslerMultiple():
 
     def setCameraParameters(self, exposureTime):
         for i in self.camList:
-            cam=self.cameras[i]
+            cam = self.cameras[i]
+            if type(exposureTime) == dict:
+                exposure = exposureTime[i]
+            else:
+                exposure = exposureTime
             cam.MaxNumBuffer = 2
-            cam.ExposureTimeRaw = exposureTime
+            cam.ExposureTimeRaw = exposure*1000
             try:
                 cam.Gain = cam.Gain.Min
             except genicam.LogicalErrorException:
                 cam.GainRaw = cam.GainRaw.Min
             cam.Width = cam.Width.Max
             cam.Height = cam.Height.Max
-            cam.ExposureTimeRaw = exposureTime
+            cam.ExposureTimeRaw = exposure*1000
 
-    def startAquisition(self):
+    def startAcquisition(self):
         for i in self.camList:
-            cam=self.cameras[i]
+            cam = self.cameras[i]
             cam.StartGrabbing(1)
+
+    def stopAcquisition(self):
+        for i in self.camList:
+            cam = self.cameras[i]
+            cam.StopGrabbing()
 
     def getImage(self):
         return self.startGrab(1)
@@ -135,23 +102,13 @@ class BaslerMultiple():
     def grabResultImage(self, cam):
         return cam.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
 
-    def close(self):
-        for i in self.camList:
-            cam=self.cameras[i]
-            cam.Close()
-
-    def stopAcquisition(self):
-        for i in self.camList:
-            cam=self.cameras[i]
-            cam.StopGrabbing()
-
     def retrieveImage(self, cam):
 
         grabResult = self.grabResultImage(cam)
 
         # When the cameras in the array are created the camera context value
         # is set to the index of the camera in the array.
-        # The camera context is a us♠er settable value.
+        # The camera context is a user settable value.
         # This value is attached to each grab result and can be used
         # to determine the camera that produced the grab result.
         cameraContextValue = grabResult.GetCameraContext()
@@ -171,48 +128,48 @@ class BaslerMultiple():
 
         return img, cameraContextValue
 
+    def getIntLimits(self):
+        for i in self.camList:
+            cam = self.cameras[i]
+            min = cam.ExposureTimeRaw.Min/1000
+            max = cam.ExposureTimeRaw.Max/1000
+            return min, max
+
+    def setIntegrationTime(self, exposureTime):
+        self.stopAcquisition()
+        for i in self.camList:
+            cam=self.cameras[i]
+            cam.ExposureTimeRaw = exposureTime*1000
+        self.startAcquisition()
+
     def getPixelSize(self, camera):
 
-        conversion = np.genfromtxt("camPixelConversion.txt", dtype='str')
-        for i, cam in enumerate(self.cameras):
+        conversion = np.genfromtxt("modules\\camPixelConversion.txt", dtype='str')
+        for i in self.camList:
+            cam = self.cameras[i]
             if cam.DeviceUserID() == camera:
                 dev = cam.DeviceModelName()
                 for i, entry in enumerate(conversion[:, 0]):
                     if entry == dev:
                         return conversion[i, 1], conversion[i, 2]
 
-        return 0,0
+        return 0, 0
 
-
-
-
-'''
-def main():
-    cam = BaslerCamera()
-    cam.openCommunication()
-    cam.setCameraParameters(6000)
-    img = cam.getImage()
-    print(img)
-'''
+    def close(self):
+        for i in self.camList:
+            cam = self.cameras[i]
+            cam.StopGrabbing()
+            cam.Close()
 
 def main():
 
-
-    cams = BaslerMultiple(namesCamsToUse)
+    cams = BaslerCam(namesCamsToUse)
     cams.openCommunications()
-    cams.setCameraParameters(6000)
-    h, v = cams.getPixelSize('BS_3')
-    print(h, v)
-    #cams.startAquisition()
-    #for i in range(2):
-    #    img, cont = cams.getImage()
-    #    print(img)
-    """
+    cams.setCameraParameters(6)
+    cams.startAcquisition()
+    for i in range(2):
+        img, cont = cams.getImage()
+        print(img)
 
-    single = BaslerCamera()
-    single.openCommunication()
-    img = single.getImage()
-    print(img)
-    """
 if __name__ == '__main__':
         main()
